@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ var commands = map[string]CommandHandler{
 	"restart_win":      handleRestartWindowsHost,
 	"shutdown_win":     handleShutdownWindowsHost,
 	"listip":           handleListIp,
+	"protheus_status":  handleProtheusStatus,
 }
 
 func StartBot() {
@@ -315,7 +317,7 @@ func handleListIp(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		return
 	}
 
-	msg := "====== Lista de IPs ======\n\n"
+	msg := "🌐🌐🌐 Lista de IPs 🌐🌐🌐\n\n"
 
 	for _, host := range hostsList {
 		msg += fmt.Sprintf("🌐\t%s\n", host.Host)
@@ -323,6 +325,36 @@ func handleListIp(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 			msg += fmt.Sprintf("•\t%s\n", host.Interfaces[i].IP)
 		}
 		msg += "\n"
+	}
+	bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
+}
+
+func handleProtheusStatus(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	z := zabbix.NewClient()
+	services, err := z.GetProtheusServiceStatus()
+	if err != nil {
+		msg := fmt.Sprintf("Erro ao pegar os status:\n%v", err)
+		bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
+		return
+	}
+
+	msg := "⚙️⚙️⚙️ Protheus Services Status ⚙️⚙️⚙️\n\n"
+	for _, service := range services {
+		name := ""
+		re := regexp.MustCompile(`"([^"]+)"`)
+		match := re.FindStringSubmatch(service.Name)
+
+		if len(match) > 1 {
+			name = match[1]
+		} else {
+			name = service.Name
+		}
+
+		if service.Lastvalue == "0" && service.Prevvalue == "0" {
+			msg += fmt.Sprintf("✅ %s\n", name)
+		} else {
+			msg += fmt.Sprintf("❌ %s\n", name)
+		}
 	}
 	bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
 }
