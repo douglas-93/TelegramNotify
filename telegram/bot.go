@@ -2,9 +2,11 @@ package bot
 
 import (
 	"TelegramNotify/monitor"
+	"TelegramNotify/schedule"
 	"TelegramNotify/zabbix"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
@@ -17,8 +19,14 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+var (
+	scheduleStore   *schedule.Storage
+	scheduleManager *schedule.Manager
+)
+
 type CommandHandler func(bot *tgbotapi.BotAPI, update tgbotapi.Update)
 
+/*
 var commands = map[string]CommandHandler{
 	"ping":             handlePing,
 	"status_check":     handleStatusCheck,
@@ -27,7 +35,11 @@ var commands = map[string]CommandHandler{
 	"shutdown_win":     handleShutdownWindowsHost,
 	"listip":           handleListIp,
 	"protheus_status":  handleProtheusStatus,
-}
+	"schedule_add":     handleScheduleAdd,
+	"schedule_remove":  handleScheduleRemove,
+	"schedule_list":    handleScheduleList,
+	"schedule_help":    handleScheduleHelp,
+}*/
 
 func StartBot(env map[string]string) {
 
@@ -42,6 +54,16 @@ func StartBot(env map[string]string) {
 	if err != nil {
 		log.Panic(err)
 	}
+
+	commands := getCommands()
+
+	/* SCHEDULE */
+	scheduleStore = schedule.NewStorage()
+	scheduleManager = schedule.NewManager()
+
+	scheduleStore.Load()
+	schedule.LoadExistingJobs(scheduleStore, scheduleManager, HandleBotCommand)
+	scheduleManager.Start()
 
 	log.Println("Bot iniciado como:", bot.Self.UserName)
 
@@ -197,7 +219,7 @@ func handleStatusCheck(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		return
 	}
 
-	msg := "🚥🚥🚥🚥🚥🚥 Status dos Hosts 🚥🚥🚥🚥🚥🚥\n\n"
+	msg := "🚥🚥🚥 Status dos Hosts 🚥🚥🚥\n\n"
 	for _, h := range hosts {
 		msg += h + "\n"
 	}
@@ -215,7 +237,7 @@ func handlePrinterCounter(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		return
 	}
 
-	msg := "🔢🔢🔢🔢🔢🔢 CONTADORES 🔢🔢🔢🔢🔢🔢\n\n"
+	msg := "🔢🔢🔢 CONTADORES 🔢🔢🔢\n\n"
 	for _, printer := range printers {
 		msg += "====== " + printer.HostData.Host + " ======\n"
 		if printer.BlackCounter != 0 {
@@ -341,4 +363,144 @@ func handleProtheusStatus(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		}
 	}
 	bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
+}
+
+func HandleBotCommand(cmd string, chatID int64) {
+	botToken := os.Getenv("TELEGRAM_API_TOKEN")
+	bot, err := tgbotapi.NewBotAPI(botToken)
+	if err != nil {
+		log.Printf("Erro ao criar bot API: %v", err)
+		return
+	}
+
+	commands := getCommands()
+
+	// Remove a barra inicial se existir
+	cmdClean := strings.TrimPrefix(cmd, "/")
+
+	// Separa o comando dos argumentos
+	parts := strings.Split(cmdClean, " ")
+	command := parts[0]
+
+	fake := tgbotapi.Update{
+		Message: &tgbotapi.Message{
+			Chat: &tgbotapi.Chat{ID: chatID},
+			Text: "/" + cmdClean, // Mantém o formato com barra
+		},
+	}
+
+	if handler, ok := commands[command]; ok {
+		log.Printf("Executando handler para comando: %s", command)
+		handler(bot, fake)
+	} else {
+		log.Printf("Comando não encontrado: %s", command)
+		msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("Comando '%s' não encontrado", command))
+		bot.Send(msg)
+	}
+}
+
+func handleScheduleAdd(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	parts := strings.Fields(update.Message.Text)
+
+	if len(parts) < 7 {
+		bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID,
+			"Uso: /schedule_add <min> <hora> <dia-mes> <mes> <dia-semana> <comando>"))
+		return
+	}
+
+	cmd := strings.Replace(parts[6], "/", "", 1)
+	commands := getCommands()
+	if _, exists := commands[cmd]; !exists {
+		bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Verifique se o comando informado é válido para o bot."))
+		return
+	}
+
+	// cron tem 5 campos
+	cronExpr := strings.Join(parts[1:6], " ")
+	command := parts[6]
+	chatID := update.Message.Chat.ID
+
+	if err := schedule.ValidateCron(cronExpr); err != nil {
+		bot.Send(tgbotapi.NewMessage(chatID, "Erro: "+err.Error()))
+		return
+	}
+
+	id := time.Now().UnixNano()
+
+	j := schedule.Job{
+		ID:      id,
+		Cron:    cronExpr,
+		Command: command,
+		ChatID:  chatID,
+		Name:    "Agendamento criado pelo usuário",
+	}
+
+	err := scheduleStore.Add(j)
+	if err != nil {
+		bot.Send(tgbotapi.NewMessage(chatID, "Erro: "+err.Error()))
+		return
+	}
+	err = scheduleManager.Add(j, func() {
+		log.Printf("Executando job agendado: %s (ID: %d)", command, id)
+		HandleBotCommand(command, chatID)
+	})
+	if err != nil {
+		bot.Send(tgbotapi.NewMessage(chatID, "Erro: "+err.Error()))
+		return
+	}
+
+	bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("Agendamento criado! ID: %d", id)))
+}
+
+func handleScheduleRemove(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	parts := strings.Split(update.Message.Text, " ")
+	if len(parts) != 2 {
+		bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Uso: /schedule_remove <ID>"))
+		return
+	}
+
+	id, _ := strconv.ParseInt(parts[1], 10, 64)
+
+	scheduleManager.Remove(id)
+	scheduleStore.Delete(id)
+
+	bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Agendamento removido!"))
+}
+
+func handleScheduleList(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	jobs := scheduleStore.All()
+
+	if len(jobs) == 0 {
+		bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Nenhum agendamento configurado."))
+		return
+	}
+
+	msg := "📅📅📅 Agendamentos atuais: 📅📅📅\n\n"
+
+	for _, j := range jobs {
+		msg += fmt.Sprintf("• *ID:* %d\nCron: `%s`\nCmd: `%s`\n\n",
+			j.ID, j.Cron, j.Command)
+	}
+
+	bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
+}
+
+func handleScheduleHelp(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, schedule.CronHelp()))
+}
+
+func getCommands() map[string]CommandHandler {
+	return map[string]CommandHandler{
+		"ping":             handlePing,
+		"status_check":     handleStatusCheck,
+		"printers_counter": handlePrinterCounter,
+		"restart_win":      handleRestartWindowsHost,
+		"shutdown_win":     handleShutdownWindowsHost,
+		"listip":           handleListIp,
+		"protheus_status":  handleProtheusStatus,
+		"schedule_add":     handleScheduleAdd,
+		"schedule_remove":  handleScheduleRemove,
+		"schedule_list":    handleScheduleList,
+		"schedule_help":    handleScheduleHelp,
+	}
 }
