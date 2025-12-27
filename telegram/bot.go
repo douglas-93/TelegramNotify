@@ -88,11 +88,18 @@ func (b *Bot) Start() {
 
 	for update := range updates {
 		logUpdate(update)
-		// Ignora qualquer update sem mensagem ou mensagens sem ChatID autorizados
+		// Ignora qualquer update sem mensagem
 		if update.Message == nil {
 			continue
 		}
 
+		// Trata comando /start antes de verificar autorização
+		if update.Message.IsCommand() && update.Message.Command() == "start" {
+			b.handleStart(update)
+			continue
+		}
+
+		// Verifica se o chat está autorizado
 		if !b.AllowedChats[update.Message.Chat.ID] {
 			continue
 		}
@@ -160,6 +167,64 @@ func logUpdate(update tgbotapi.Update) {
 		username,
 		comando,
 	)
+}
+
+func (b *Bot) handleStart(update tgbotapi.Update) {
+	chatID := update.Message.Chat.ID
+	userName := update.Message.From.FirstName
+	if update.Message.From.LastName != "" {
+		userName += " " + update.Message.From.LastName
+	}
+
+	// Verifica se o usuário está autorizado
+	if !b.AllowedChats[chatID] {
+		msg := tgbotapi.NewMessage(chatID, fmt.Sprintf(
+			"🚫 *Acesso Não Autorizado*\n\n"+
+				"Olá, %s!\n\n"+
+				"Infelizmente você não tem permissão para usar este bot.\n\n"+
+				"Este é um bot privado e apenas usuários autorizados podem utilizá-lo.\n\n"+
+				"_Chat ID: %d_",
+			userName, chatID,
+		))
+		msg.ParseMode = "Markdown"
+		b.API.Send(msg)
+		log.Printf("⚠️  Tentativa de acesso não autorizado - Chat ID: %d, Nome: %s", chatID, userName)
+		return
+	}
+
+	// Mensagem de boas-vindas para usuários autorizados
+	welcomeMsg := fmt.Sprintf(
+		"👋 *Bem-vindo, %s!*\n\n"+
+			"Sou o *LapaTelegramBot*, seu assistente de gerenciamento e monitoramento.\n\n"+
+			"🎯 *Principais Funcionalidades:*\n\n"+
+			"🌐 *Monitoramento de Rede*\n"+
+			"• `/ping` - Testa conectividade\n"+
+			"• `/listip` - Lista hosts do Zabbix\n\n"+
+			"📊 *Monitoramento Zabbix*\n"+
+			"• `/status_check` - Status dos hosts\n"+
+			"• `/printers_counter` - Contadores de impressoras\n"+
+			"• `/protheus_status` - Status Protheus/TOTVS\n\n"+
+			"⚙️ *Gerenciamento de Serviços*\n"+
+			"• `/services` - Gerenciar serviços remotos\n"+
+			"• `/list_services` - Listar serviços\n\n"+
+			"💻 *Gerenciamento Windows*\n"+
+			"• `/restart_win` - Reiniciar host\n"+
+			"• `/shutdown_win` - Desligar host\n\n"+
+			"📧 *Relatórios*\n"+
+			"• `/send_mail_counter` - Enviar contadores por email\n\n"+
+			"⏰ *Agendamentos*\n"+
+			"• `/schedule_add` - Criar agendamento\n"+
+			"• `/schedule_list` - Listar agendamentos\n"+
+			"• `/schedule_remove` - Remover agendamento\n"+
+			"• `/schedule_help` - Ajuda sobre CRON\n\n"+
+			"💡 *Dica:* Todos os comandos fornecem feedback em tempo real!\n\n"+
+			"Digite qualquer comando para começar. 🚀",
+		userName,
+	)
+
+	msg := tgbotapi.NewMessage(chatID, welcomeMsg)
+	msg.ParseMode = "Markdown"
+	b.API.Send(msg)
 }
 
 func loadAllowedChats(parts []string) map[int64]bool {
