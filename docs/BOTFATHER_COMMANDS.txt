@@ -1,3 +1,4 @@
+start - Inicia o bot e exibe menu de comandos
 ping - Realiza ping em um ou mais endereços IP
 listip - Lista todos os hosts e IPs cadastrados no Zabbix
 status_check - Verifica status online/offline dos hosts monitorados
