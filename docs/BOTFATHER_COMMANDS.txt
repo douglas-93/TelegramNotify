@@ -1,0 +1,14 @@
+ping - Realiza ping em um ou mais endereços IP
+listip - Lista todos os hosts e IPs cadastrados no Zabbix
+status_check - Verifica status online/offline dos hosts monitorados
+printers_counter - Exibe contadores de impressão e gera planilha Excel
+protheus_status - Monitora status dos serviços Protheus/TOTVS
+services - Gerencia serviços remotos (start/stop/restart)
+list_services - Lista serviços de um host remoto com filtro opcional
+restart_win - Reinicia remotamente um host Windows
+shutdown_win - Desliga remotamente um host Windows
+send_mail_counter - Envia relatório de contadores por email
+schedule_add - Cria agendamento usando expressões CRON
+schedule_list - Lista todos os agendamentos ativos
+schedule_remove - Remove um agendamento específico pelo ID
+schedule_help - Exibe guia sobre expressões CRON
