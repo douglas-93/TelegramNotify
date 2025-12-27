@@ -2,6 +2,7 @@ package bot
 
 import (
 	"LapaTelegramBot/schedule"
+	"LapaTelegramBot/zabbix"
 	"fmt"
 	"log"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 type Bot struct {
 	API             *tgbotapi.BotAPI
+	Zabbix          *zabbix.Client
 	ScheduleStore   *schedule.Storage
 	ScheduleManager *schedule.Manager
 	Commands        map[string]func(tgbotapi.Update)
@@ -33,6 +35,7 @@ func StartBot() {
 
 	bot := &Bot{
 		API:          api,
+		Zabbix:       zabbix.NewClient(),
 		AllowedChats: allowed,
 	}
 

@@ -3,7 +3,6 @@ package bot
 import (
 	"LapaTelegramBot/file_handler"
 	"LapaTelegramBot/monitor"
-	"LapaTelegramBot/zabbix"
 	"fmt"
 	"log"
 	"os"
@@ -13,8 +12,7 @@ import (
 )
 
 func (b *Bot) handleStatusCheck(update tgbotapi.Update) {
-	z := zabbix.NewClient()
-	hosts, err := monitor.CheckHostsStatus(z)
+	hosts, err := monitor.CheckHostsStatus(b.Zabbix)
 	if err != nil {
 		msg := fmt.Sprintf("Erro ao consultar Zabbix:\n%v", err)
 		b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
@@ -31,8 +29,7 @@ func (b *Bot) handleStatusCheck(update tgbotapi.Update) {
 }
 
 func (b *Bot) handlePrinterCounter(update tgbotapi.Update) {
-	z := zabbix.NewClient()
-	printers, err := monitor.GetPrintersCounter(z)
+	printers, err := monitor.GetPrintersCounter(b.Zabbix)
 	if err != nil {
 		msg := fmt.Sprintf("Erro ao consultar Zabbix:\n%v", err)
 		b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
@@ -62,8 +59,7 @@ func (b *Bot) handlePrinterCounter(update tgbotapi.Update) {
 }
 
 func (b *Bot) handleListIp(update tgbotapi.Update) {
-	z := zabbix.NewClient()
-	hostsList, err := z.ListIps()
+	hostsList, err := b.Zabbix.ListIps()
 	if err != nil {
 		msg := fmt.Sprintf("Erro ao listar Zabbix:\n%v", err)
 		b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
@@ -83,8 +79,7 @@ func (b *Bot) handleListIp(update tgbotapi.Update) {
 }
 
 func (b *Bot) handleProtheusStatus(update tgbotapi.Update) {
-	z := zabbix.NewClient()
-	services, err := z.GetProtheusServiceStatus()
+	services, err := b.Zabbix.GetProtheusServiceStatus()
 	if err != nil {
 		msg := fmt.Sprintf("Erro ao pegar os status:\n%v", err)
 		b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
