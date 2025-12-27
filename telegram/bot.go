@@ -60,17 +60,18 @@ func (b *Bot) initSchedule() {
 
 func (b *Bot) initCommands() {
 	b.Commands = map[string]func(tgbotapi.Update){
-		"ping":             b.handlePing,
 		"status_check":     b.handleStatusCheck,
-		"printers_counter": b.handlePrinterCounter,
-		"restart_win":      b.handleRestartWindowsHost,
-		"shutdown_win":     b.handleShutdownWindowsHost,
-		"listip":           b.handleListIp,
 		"protheus_status":  b.handleProtheusStatus,
+		"listip":           b.handleListIp,
+		"ping":             b.handlePing,
+		"services":         b.handleRemoteServices,
+		"printers_counter": b.handlePrinterCounter,
 		"schedule_add":     b.handleScheduleAdd,
 		"schedule_remove":  b.handleScheduleRemove,
 		"schedule_list":    b.handleScheduleList,
 		"schedule_help":    b.handleScheduleHelp,
+		"restart_win":      b.handleRestartWindowsHost,
+		"shutdown_win":     b.handleShutdownWindowsHost,
 	}
 }
 
@@ -104,7 +105,6 @@ func (b *Bot) Start() {
 	}
 }
 
-// ExecuteCommand method to be used by the scheduler or internal calls
 func (b *Bot) ExecuteCommand(cmd string, chatID int64) {
 	// Remove a barra inicial se existir (embora o scheduler geralmente guarde o comando raw)
 	cmdClean := strings.TrimPrefix(cmd, "/")
