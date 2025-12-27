@@ -41,7 +41,14 @@ func (b *Bot) handleSendMailCounter(update tgbotapi.Update) {
 	b.API.Send(updateMsg)
 
 	// Gera planilha Excel
-	excelFile := file_handler.GenerateSheet()
+	excelFile, err := file_handler.GenerateSheet(printers)
+	if err != nil {
+		errorMsg := fmt.Sprintf("❌ Erro ao gerar planilha:\n%v", err)
+		edit := tgbotapi.NewEditMessageText(update.Message.Chat.ID, tempMsg.MessageID, errorMsg)
+		b.API.Send(edit)
+		log.Printf("Erro ao gerar planilha: %v", err)
+		return
+	}
 	defer os.Remove(excelFile)
 
 	// Atualiza mensagem

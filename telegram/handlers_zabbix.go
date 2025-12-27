@@ -12,10 +12,15 @@ import (
 )
 
 func (b *Bot) handleStatusCheck(update tgbotapi.Update) {
+	// Envia mensagem inicial
+	processingMsg := tgbotapi.NewMessage(update.Message.Chat.ID, "⏳ Consultando status dos hosts no Zabbix...")
+	tempMsg, _ := b.API.Send(processingMsg)
+
 	hosts, err := monitor.CheckHostsStatus(b.Zabbix)
 	if err != nil {
-		msg := fmt.Sprintf("Erro ao consultar Zabbix:\n%v", err)
-		b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
+		errorMsg := fmt.Sprintf("❌ Erro ao consultar Zabbix:\n%v", err)
+		edit := tgbotapi.NewEditMessageText(update.Message.Chat.ID, tempMsg.MessageID, errorMsg)
+		b.API.Send(edit)
 		log.Println(err)
 		return
 	}
@@ -25,17 +30,27 @@ func (b *Bot) handleStatusCheck(update tgbotapi.Update) {
 		msg += h + "\n"
 	}
 
-	b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
+	edit := tgbotapi.NewEditMessageText(update.Message.Chat.ID, tempMsg.MessageID, msg)
+	b.API.Send(edit)
 }
 
 func (b *Bot) handlePrinterCounter(update tgbotapi.Update) {
+	// Envia mensagem inicial
+	processingMsg := tgbotapi.NewMessage(update.Message.Chat.ID, "⏳ Coletando contadores das impressoras...")
+	tempMsg, _ := b.API.Send(processingMsg)
+
 	printers, err := monitor.GetPrintersCounter(b.Zabbix)
 	if err != nil {
-		msg := fmt.Sprintf("Erro ao consultar Zabbix:\n%v", err)
-		b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
+		errorMsg := fmt.Sprintf("❌ Erro ao consultar Zabbix:\n%v", err)
+		edit := tgbotapi.NewEditMessageText(update.Message.Chat.ID, tempMsg.MessageID, errorMsg)
+		b.API.Send(edit)
 		log.Println(err)
 		return
 	}
+
+	// Atualiza mensagem
+	updateMsg := tgbotapi.NewEditMessageText(update.Message.Chat.ID, tempMsg.MessageID, "📊 Processando dados...")
+	b.API.Send(updateMsg)
 
 	msg := "🔢🔢🔢 CONTADORES 🔢🔢🔢\n\n"
 	for _, printer := range printers {
@@ -52,17 +67,41 @@ func (b *Bot) handlePrinterCounter(update tgbotapi.Update) {
 		msg += "\n"
 	}
 
-	b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
-	excelFile := file_handler.GenerateSheet()
+	// Envia resultado
+	edit := tgbotapi.NewEditMessageText(update.Message.Chat.ID, tempMsg.MessageID, msg)
+	b.API.Send(edit)
+
+	// Atualiza para gerar planilha
+	updateMsg = tgbotapi.NewEditMessageText(update.Message.Chat.ID, tempMsg.MessageID, msg+"\n📄 Gerando planilha Excel...")
+	b.API.Send(updateMsg)
+
+	excelFile, err := file_handler.GenerateSheet(printers)
+	if err != nil {
+		errorMsg := fmt.Sprintf("❌ Erro ao gerar planilha:\n%v", err)
+		b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, errorMsg))
+		log.Println(err)
+		return
+	}
+
+	// Envia planilha
 	b.API.Send(tgbotapi.NewDocument(update.Message.Chat.ID, tgbotapi.FilePath(excelFile)))
 	os.Remove(excelFile)
+
+	// Atualiza mensagem final
+	finalMsg := tgbotapi.NewEditMessageText(update.Message.Chat.ID, tempMsg.MessageID, msg+"\n✅ Planilha enviada com sucesso!")
+	b.API.Send(finalMsg)
 }
 
 func (b *Bot) handleListIp(update tgbotapi.Update) {
+	// Envia mensagem inicial
+	processingMsg := tgbotapi.NewMessage(update.Message.Chat.ID, "⏳ Consultando lista de IPs no Zabbix...")
+	tempMsg, _ := b.API.Send(processingMsg)
+
 	hostsList, err := b.Zabbix.ListIps()
 	if err != nil {
-		msg := fmt.Sprintf("Erro ao listar Zabbix:\n%v", err)
-		b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
+		errorMsg := fmt.Sprintf("❌ Erro ao listar Zabbix:\n%v", err)
+		edit := tgbotapi.NewEditMessageText(update.Message.Chat.ID, tempMsg.MessageID, errorMsg)
+		b.API.Send(edit)
 		return
 	}
 
@@ -75,14 +114,21 @@ func (b *Bot) handleListIp(update tgbotapi.Update) {
 		}
 		msg += "\n"
 	}
-	b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
+
+	edit := tgbotapi.NewEditMessageText(update.Message.Chat.ID, tempMsg.MessageID, msg)
+	b.API.Send(edit)
 }
 
 func (b *Bot) handleProtheusStatus(update tgbotapi.Update) {
+	// Envia mensagem inicial
+	processingMsg := tgbotapi.NewMessage(update.Message.Chat.ID, "⏳ Consultando status dos serviços Protheus...")
+	tempMsg, _ := b.API.Send(processingMsg)
+
 	services, err := b.Zabbix.GetProtheusServiceStatus()
 	if err != nil {
-		msg := fmt.Sprintf("Erro ao pegar os status:\n%v", err)
-		b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
+		errorMsg := fmt.Sprintf("❌ Erro ao pegar os status:\n%v", err)
+		edit := tgbotapi.NewEditMessageText(update.Message.Chat.ID, tempMsg.MessageID, errorMsg)
+		b.API.Send(edit)
 		return
 	}
 
@@ -104,5 +150,7 @@ func (b *Bot) handleProtheusStatus(update tgbotapi.Update) {
 			msg += fmt.Sprintf("❌ %s\n", name)
 		}
 	}
-	b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
+
+	edit := tgbotapi.NewEditMessageText(update.Message.Chat.ID, tempMsg.MessageID, msg)
+	b.API.Send(edit)
 }
