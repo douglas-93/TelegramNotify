@@ -14,7 +14,6 @@ require (
 
 require (
 	github.com/google/uuid v1.4.0 // indirect
-	github.com/kardianos/service v1.2.4 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.4 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
