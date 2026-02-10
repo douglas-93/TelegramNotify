@@ -93,26 +93,30 @@ func (b *Bot) handleRestartWindowsHost(update tgbotapi.Update) {
 		return
 	}
 
-	host := parts[1]
-	log.Printf("Handler restart_win acionado, destino: %s", host)
+	hosts := parts[1]
 
-	cmd := exec.Command(
-		"shutdown",
-		"/r",
-		"/t", "0",
-		"/m", fmt.Sprintf("\\\\%s", host),
-	)
+	for _, host := range strings.Split(hosts, ",") {
+		host = strings.TrimSpace(host)
+		log.Printf("Handler restart_win acionado, destino: %s", host)
 
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		e := fmt.Sprintf("Erro ao tentar reiniciar %s: %v\nSaída: %s", host, err, string(output))
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, e)
+		cmd := exec.Command(
+			"shutdown",
+			"/r",
+			"/t", "0",
+			"/m", fmt.Sprintf("\\\\%s", host),
+		)
+
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			e := fmt.Sprintf("Erro ao tentar reiniciar %s: %v\nSaída: %s", host, err, string(output))
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, e)
+			b.API.Send(msg)
+			continue
+		}
+		m := fmt.Sprintf("✅ Comando executado para: %s", host)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, m)
 		b.API.Send(msg)
-		return
 	}
-	m := fmt.Sprintf("✅ Comando executado para: %s", host)
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, m)
-	b.API.Send(msg)
 }
 
 func (b *Bot) handleShutdownWindowsHost(update tgbotapi.Update) {
@@ -122,26 +126,31 @@ func (b *Bot) handleShutdownWindowsHost(update tgbotapi.Update) {
 		b.API.Send(msg)
 		return
 	}
-	host := parts[1]
-	log.Printf("Handler shutdown_win acionado, destino: %s", host)
 
-	cmd := exec.Command(
-		"shutdown",
-		"/s",
-		"/t", "0",
-		"/m", fmt.Sprintf("\\\\%s", host),
-	)
+	hosts := parts[1]
 
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		e := fmt.Sprintf("Erro ao tentar desligar %s: %v\nSaída: %s", host, err, string(output))
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, e)
+	for _, host := range strings.Split(hosts, ",") {
+		host = strings.TrimSpace(host)
+		log.Printf("Handler shutdown_win acionado, destino: %s", host)
+
+		cmd := exec.Command(
+			"shutdown",
+			"/s",
+			"/t", "0",
+			"/m", fmt.Sprintf("\\\\%s", host),
+		)
+
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			e := fmt.Sprintf("Erro ao tentar desligar %s: %v\nSaída: %s", host, err, string(output))
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, e)
+			b.API.Send(msg)
+			continue
+		}
+		m := fmt.Sprintf("✅ Comando executado para: %s", host)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, m)
 		b.API.Send(msg)
-		return
 	}
-	m := fmt.Sprintf("✅ Comando executado para: %s", host)
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, m)
-	b.API.Send(msg)
 }
 
 func (b *Bot) handleRemoteServices(update tgbotapi.Update) {
