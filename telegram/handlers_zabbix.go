@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"strconv"
+	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -153,4 +155,34 @@ func (b *Bot) handleProtheusStatus(update tgbotapi.Update) {
 
 	edit := tgbotapi.NewEditMessageText(update.Message.Chat.ID, tempMsg.MessageID, msg)
 	b.API.Send(edit)
+}
+
+func (b *Bot) handleStatusMonitor(update tgbotapi.Update) {
+	chatID := update.Message.Chat.ID
+
+	// Exemplo de uso: /status_monitor 5   (5 minutos)
+	parts := strings.Fields(update.Message.Text)
+	if len(parts) < 2 {
+		msg := tgbotapi.NewMessage(chatID, "Uso: /status_monitor <minutos>\nExemplo: /status_monitor 5")
+		b.API.Send(msg)
+		return
+	}
+
+	minutes, err := strconv.Atoi(parts[1])
+	if err != nil || minutes <= 0 {
+		msg := tgbotapi.NewMessage(chatID, "Intervalo inválido. Informe um número inteiro de minutos.")
+		b.API.Send(msg)
+		return
+	}
+
+	if _, ok := b.Monitors[chatID]; ok {
+		b.API.Send(tgbotapi.NewMessage(chatID, "Já existe um monitor em execução para este chat."))
+		return
+	}
+
+	m := NewMonitor(chatID, minutes)
+	b.Monitors[chatID] = m
+	go m.run(b)
+
+	b.API.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("Monitor iniciado: checagem a cada %d minutos. Vou avisar somente quando houver hosts offline.", minutes)))
 }

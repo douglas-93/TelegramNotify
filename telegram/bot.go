@@ -21,6 +21,7 @@ type Bot struct {
 	ScheduleManager *schedule.Manager
 	Commands        map[string]func(tgbotapi.Update)
 	AllowedChats    map[int64]bool
+	Monitors        map[int64]*Monitor
 }
 
 func StartBot() {
@@ -40,6 +41,7 @@ func StartBot() {
 		Zabbix:       zabbix.NewClient(),
 		Mailer:       mailer.NewClient(),
 		AllowedChats: allowed,
+		Monitors:     make(map[int64]*Monitor),
 	}
 
 	bot.initCommands()
@@ -64,6 +66,7 @@ func (b *Bot) initSchedule() {
 func (b *Bot) initCommands() {
 	b.Commands = map[string]func(tgbotapi.Update){
 		"status_check":      b.handleStatusCheck,
+		"status_monitor":    b.handleStatusMonitor,
 		"protheus_status":   b.handleProtheusStatus,
 		"listip":            b.handleListIp,
 		"ping":              b.handlePing,
@@ -87,6 +90,60 @@ func (b *Bot) Start() {
 	updates := b.API.GetUpdatesChan(u)
 
 	for update := range updates {
+		// Processa callback queries (inline buttons)
+		if update.CallbackQuery != nil {
+			data := update.CallbackQuery.Data
+			// formato esperado: monitor:action:chatID
+			parts := strings.Split(data, ":")
+			if len(parts) >= 3 && parts[0] == "monitor" {
+				action := parts[1]
+				chatID := update.CallbackQuery.Message.Chat.ID
+
+				m, ok := b.Monitors[chatID]
+				if !ok {
+					// responde callback e envia mensagem de erro
+					answer := tgbotapi.NewCallback(update.CallbackQuery.ID, "Monitor não encontrado.")
+					b.API.Request(answer)
+					b.API.Send(tgbotapi.NewMessage(chatID, "Monitor não encontrado para este chat."))
+					continue
+				}
+
+				switch action {
+				case "stop":
+					// Remove os botões da última mensagem, se existir
+					if m.lastMsgID != 0 {
+						edit := tgbotapi.NewEditMessageReplyMarkup(chatID, m.lastMsgID, tgbotapi.InlineKeyboardMarkup{})
+						b.API.Send(edit)
+						m.lastMsgID = 0
+					}
+					// sinaliza parada sem fechar o channel diretamente
+					select {
+					case m.stopCh <- struct{}{}:
+					default:
+					}
+					delete(b.Monitors, chatID)
+					// responde callback e envia mensagem ao chat
+					answer := tgbotapi.NewCallback(update.CallbackQuery.ID, "Monitor parado.")
+					b.API.Request(answer)
+					b.API.Send(tgbotapi.NewMessage(chatID, "Monitor parado."))
+				case "continue":
+					answer := tgbotapi.NewCallback(update.CallbackQuery.ID, "Continuarei avisando no intervalo definido.")
+					b.API.Request(answer)
+					b.API.Send(tgbotapi.NewMessage(chatID, "Continuarei avisando no intervalo definido."))
+				case "increase":
+					// marca que o monitor está aguardando novo intervalo via mensagem
+					m.waitingInterval = true
+					answer := tgbotapi.NewCallback(update.CallbackQuery.ID, "Peça enviada.")
+					b.API.Request(answer)
+					b.API.Send(tgbotapi.NewMessage(chatID, "Envie o novo intervalo em minutos como mensagem nesta conversa."))
+				default:
+					answer := tgbotapi.NewCallback(update.CallbackQuery.ID, "Ação desconhecida.")
+					b.API.Request(answer)
+					b.API.Send(tgbotapi.NewMessage(chatID, "Ação desconhecida."))
+				}
+			}
+			continue
+		}
 		logUpdate(update)
 		// Ignora qualquer update sem mensagem
 		if update.Message == nil {
@@ -104,7 +161,7 @@ func (b *Bot) Start() {
 			continue
 		}
 
-		if !update.Message.IsCommand() { // Ignora mensagens que não são comandos
+		if !update.Message.IsCommand() { // Processa mensagens não-comando
 			// Verifica se é um arquivo (Documento, Foto, Audio, Video, etc)
 			if update.Message.Document != nil ||
 				update.Message.Photo != nil ||
@@ -115,6 +172,20 @@ func (b *Bot) Start() {
 				continue
 			}
 
+			// Se existe um monitor aguardando novo intervalo, trata essa mensagem como novo intervalo
+			if m, ok := b.Monitors[update.Message.Chat.ID]; ok && m.waitingInterval {
+				text := strings.TrimSpace(update.Message.Text)
+				minutes, err := strconv.Atoi(text)
+				if err != nil || minutes <= 0 {
+					b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Intervalo inválido. Informe um número inteiro de minutos."))
+					continue
+				}
+				// envia novo intervalo para o monitor
+				m.waitingInterval = false
+				m.updateInterval <- minutes
+				b.API.Send(tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("Intervalo atualizado para %d minutos.", minutes)))
+				continue
+			}
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Informe um comando.")
 			b.API.Send(msg)
 			continue
