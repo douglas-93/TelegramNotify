@@ -126,10 +126,6 @@ func (b *Bot) Start() {
 					answer := tgbotapi.NewCallback(update.CallbackQuery.ID, "Monitor parado.")
 					b.API.Request(answer)
 					b.API.Send(tgbotapi.NewMessage(chatID, "Monitor parado."))
-				case "continue":
-					answer := tgbotapi.NewCallback(update.CallbackQuery.ID, "Continuarei avisando no intervalo definido.")
-					b.API.Request(answer)
-					b.API.Send(tgbotapi.NewMessage(chatID, "Continuarei avisando no intervalo definido."))
 				case "increase":
 					// marca que o monitor está aguardando novo intervalo via mensagem
 					m.waitingInterval = true

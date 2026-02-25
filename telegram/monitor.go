@@ -61,9 +61,8 @@ func (m *Monitor) run(b *Bot) {
 
 		kb := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("Continuar avisando", fmt.Sprintf("monitor:continue:%d", m.ChatID)),
-				tgbotapi.NewInlineKeyboardButtonData("Aumentar intervalo", fmt.Sprintf("monitor:increase:%d", m.ChatID)),
-				tgbotapi.NewInlineKeyboardButtonData("Parar aviso", fmt.Sprintf("monitor:stop:%d", m.ChatID)),
+				tgbotapi.NewInlineKeyboardButtonData("⏱️ Aumentar intervalo", fmt.Sprintf("monitor:increase:%d", m.ChatID)),
+				tgbotapi.NewInlineKeyboardButtonData("🛑 Parar aviso", fmt.Sprintf("monitor:stop:%d", m.ChatID)),
 			),
 		)
 
